@@ -4,7 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
-import { Menu, X, Search, MessageSquare, Zap, Bell, HelpCircle, Settings } from "lucide-react";
+import { Menu, X, Search, MessageSquare, Zap, Bell, HelpCircle, Settings, BarChart3 } from "lucide-react";
 import { useState } from "react";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
@@ -14,6 +14,7 @@ import AIReplyGenerator from "@/components/sections/ai-reply-generator";
 import RescanAlerts from "@/components/sections/rescan-alerts";
 import FAQGenerator from "@/components/sections/faq-generator";
 import APISettings from "@/components/sections/api-settings";
+import SocialMetrics from "@/pages/SocialMetrics";
 
 function Navigation() {
   const [location] = useLocation();
@@ -23,6 +24,7 @@ function Navigation() {
     { name: 'Brand Opportunities', href: '/', icon: Search },
     { name: 'Thread Discovery', href: '/thread-discovery', icon: MessageSquare },
     { name: 'AI Reply Generator', href: '/ai-reply-generator', icon: Zap },
+    { name: 'Social Metrics', href: '/social-metrics', icon: BarChart3 },
     { name: 'Rescan Alerts', href: '/rescan-alerts', icon: Bell },
     { name: 'FAQ Generator', href: '/faq-generator', icon: HelpCircle },
     { name: 'API Settings', href: '/api-settings', icon: Settings },
@@ -113,6 +115,7 @@ function Router() {
           <Route path="/" component={BrandOpportunities} />
           <Route path="/thread-discovery" component={ThreadDiscovery} />
           <Route path="/ai-reply-generator" component={AIReplyGenerator} />
+          <Route path="/social-metrics" component={SocialMetrics} />
           <Route path="/rescan-alerts" component={RescanAlerts} />
           <Route path="/faq-generator" component={FAQGenerator} />
           <Route path="/api-settings" component={APISettings} />

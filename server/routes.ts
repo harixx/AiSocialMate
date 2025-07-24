@@ -1,9 +1,10 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertAlertSchema, insertSearchResultSchema, insertGeneratedReplySchema } from "@shared/schema";
+import { insertAlertSchema, insertSearchResultSchema, insertGeneratedReplySchema, insertSocialMetricsSchema } from "@shared/schema";
 import OpenAI from "openai";
 import { config } from "./config";
+import { getSocialMetrics, getBulkSocialMetrics, metricsMonitor } from "./social-metrics";
 
 // Initialize OpenAI client with validated configuration
 const openai = new OpenAI({ 
@@ -632,6 +633,199 @@ Generate a JSON object with an array called "faqs" containing objects with "ques
   });
 
   const httpServer = createServer(app);
+  // Real-time Social Media Metrics Endpoints
+  app.post("/api/metrics/get", async (req, res) => {
+    try {
+      const { url } = req.body;
+      
+      if (!url) {
+        return res.status(400).json({ message: "URL is required" });
+      }
+      
+      // Get real-time metrics for the URL
+      const metrics = await getSocialMetrics(url);
+      
+      // Store metrics in database
+      if (metrics.success) {
+        await storage.createSocialMetric({
+          platform: metrics.platform,
+          url: metrics.url,
+          metrics: metrics.metrics,
+          timestamp: new Date(metrics.timestamp),
+          success: metrics.success,
+          error: metrics.error || null
+        });
+      }
+      
+      res.json(metrics);
+      
+    } catch (error) {
+      console.error('Social metrics error:', error);
+      res.status(500).json({ 
+        message: "Failed to fetch social media metrics",
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  app.post("/api/metrics/bulk", async (req, res) => {
+    try {
+      const { urls } = req.body;
+      
+      if (!urls || !Array.isArray(urls)) {
+        return res.status(400).json({ message: "URLs array is required" });
+      }
+      
+      if (urls.length > 20) {
+        return res.status(400).json({ message: "Maximum 20 URLs allowed per request" });
+      }
+      
+      // Get metrics for all URLs in parallel
+      const metricsArray = await getBulkSocialMetrics(urls);
+      
+      // Store successful metrics in database
+      const storePromises = metricsArray
+        .filter(m => m.success)
+        .map(metrics => storage.createSocialMetric({
+          platform: metrics.platform,
+          url: metrics.url,
+          metrics: metrics.metrics,
+          timestamp: new Date(metrics.timestamp),
+          success: metrics.success,
+          error: metrics.error || null
+        }));
+      
+      await Promise.all(storePromises);
+      
+      res.json({
+        success: true,
+        results: metricsArray,
+        totalProcessed: metricsArray.length,
+        successfulCount: metricsArray.filter(m => m.success).length
+      });
+      
+    } catch (error) {
+      console.error('Bulk social metrics error:', error);
+      res.status(500).json({ 
+        message: "Failed to fetch bulk social media metrics",
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  app.get("/api/metrics/history/:url", async (req, res) => {
+    try {
+      const url = decodeURIComponent(req.params.url);
+      const { platform, limit = "50" } = req.query;
+      
+      let metrics = await storage.getSocialMetrics(url, platform as string);
+      
+      // Limit results
+      const limitNum = parseInt(limit as string, 10);
+      if (limitNum > 0) {
+        metrics = metrics.slice(0, limitNum);
+      }
+      
+      res.json({
+        success: true,
+        url,
+        platform,
+        count: metrics.length,
+        metrics
+      });
+      
+    } catch (error) {
+      console.error('Metrics history error:', error);
+      res.status(500).json({ 
+        message: "Failed to fetch metrics history",
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  app.post("/api/metrics/monitor/start", async (req, res) => {
+    try {
+      const { url, intervalMinutes = 5 } = req.body;
+      
+      if (!url) {
+        return res.status(400).json({ message: "URL is required" });
+      }
+      
+      const intervalMs = intervalMinutes * 60 * 1000; // Convert to milliseconds
+      
+      // Start monitoring with callback to store metrics
+      metricsMonitor.startMonitoring(url, intervalMs, async (metrics) => {
+        if (metrics.success) {
+          await storage.createSocialMetric({
+            platform: metrics.platform,
+            url: metrics.url,
+            metrics: metrics.metrics,
+            timestamp: new Date(metrics.timestamp),
+            success: metrics.success,
+            error: metrics.error || null
+          });
+        }
+      });
+      
+      res.json({
+        success: true,
+        message: `Started monitoring ${url} every ${intervalMinutes} minutes`,
+        url,
+        intervalMinutes
+      });
+      
+    } catch (error) {
+      console.error('Start monitoring error:', error);
+      res.status(500).json({ 
+        message: "Failed to start monitoring",
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  app.post("/api/metrics/monitor/stop", async (req, res) => {
+    try {
+      const { url } = req.body;
+      
+      if (!url) {
+        return res.status(400).json({ message: "URL is required" });
+      }
+      
+      metricsMonitor.stopMonitoring(url);
+      
+      res.json({
+        success: true,
+        message: `Stopped monitoring ${url}`,
+        url
+      });
+      
+    } catch (error) {
+      console.error('Stop monitoring error:', error);
+      res.status(500).json({ 
+        message: "Failed to stop monitoring",
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  app.post("/api/metrics/monitor/stop-all", async (req, res) => {
+    try {
+      metricsMonitor.stopAllMonitoring();
+      
+      res.json({
+        success: true,
+        message: "Stopped all monitoring"
+      });
+      
+    } catch (error) {
+      console.error('Stop all monitoring error:', error);
+      res.status(500).json({ 
+        message: "Failed to stop all monitoring",
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
   return httpServer;
 }
 

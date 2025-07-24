@@ -62,6 +62,17 @@ export const faqs = pgTable("faqs", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const socialMetrics = pgTable("social_metrics", {
+  id: serial("id").primaryKey(),
+  platform: text("platform").notNull(), // 'reddit' | 'quora' | 'twitter'
+  url: text("url").notNull(),
+  metrics: jsonb("metrics").notNull(), // Store all engagement metrics as JSON
+  timestamp: timestamp("timestamp").defaultNow(),
+  success: boolean("success").notNull(),
+  error: text("error"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -73,17 +84,17 @@ export const insertAlertSchema = createInsertSchema(alerts).omit({
   lastRun: true,
 });
 
+export const insertSocialMetricsSchema = createInsertSchema(socialMetrics).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertSearchResultSchema = createInsertSchema(searchResults).omit({
   id: true,
   createdAt: true,
 });
 
 export const insertGeneratedReplySchema = createInsertSchema(generatedReplies).omit({
-  id: true,
-  createdAt: true,
-});
-
-export const insertFAQSchema = createInsertSchema(faqs).omit({
   id: true,
   createdAt: true,
 });
@@ -103,3 +114,5 @@ export type GeneratedReply = typeof generatedReplies.$inferSelect;
 export type InsertGeneratedReply = z.infer<typeof insertGeneratedReplySchema>;
 export type Faq = typeof faqs.$inferSelect;
 export type InsertFaq = z.infer<typeof insertFaqSchema>;
+export type SocialMetric = typeof socialMetrics.$inferSelect;
+export type InsertSocialMetric = z.infer<typeof insertSocialMetricsSchema>;

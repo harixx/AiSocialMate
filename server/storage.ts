@@ -1,9 +1,9 @@
 import { 
-  users, alerts, searchResults, generatedReplies, faqs,
+  users, alerts, searchResults, generatedReplies, faqs, socialMetrics,
   type User, type InsertUser, type Alert, type InsertAlert,
   type SearchResult, type InsertSearchResult,
   type GeneratedReply, type InsertGeneratedReply,
-  type Faq, type InsertFaq
+  type Faq, type InsertFaq, type SocialMetric, type InsertSocialMetric
 } from "@shared/schema";
 
 export interface IStorage {
@@ -26,6 +26,11 @@ export interface IStorage {
   // Generated Replies
   getGeneratedReplies(): Promise<GeneratedReply[]>;
   createGeneratedReply(reply: InsertGeneratedReply): Promise<GeneratedReply>;
+  
+  // Social Metrics
+  getSocialMetrics(url?: string, platform?: string): Promise<SocialMetric[]>;
+  createSocialMetric(metric: InsertSocialMetric): Promise<SocialMetric>;
+  getLatestMetrics(url: string): Promise<SocialMetric | undefined>;
 }
 
 export class MemStorage implements IStorage {
@@ -33,20 +38,24 @@ export class MemStorage implements IStorage {
   private alerts: Map<number, Alert>;
   private searchResults: Map<number, SearchResult>;
   private generatedReplies: Map<number, GeneratedReply>;
+  private socialMetrics: Map<number, SocialMetric>;
   private currentUserId: number;
   private currentAlertId: number;
   private currentSearchResultId: number;
   private currentReplyId: number;
+  private currentMetricId: number;
 
   constructor() {
     this.users = new Map();
     this.alerts = new Map();
     this.searchResults = new Map();
     this.generatedReplies = new Map();
+    this.socialMetrics = new Map();
     this.currentUserId = 1;
     this.currentAlertId = 1;
     this.currentSearchResultId = 1;
     this.currentReplyId = 1;
+    this.currentMetricId = 1;
   }
 
   async getUser(id: number): Promise<User | undefined> {
@@ -145,6 +154,38 @@ export class MemStorage implements IStorage {
     };
     this.generatedReplies.set(id, reply);
     return reply;
+  }
+
+  async getSocialMetrics(url?: string, platform?: string): Promise<SocialMetric[]> {
+    let metrics = Array.from(this.socialMetrics.values());
+    
+    if (url) {
+      metrics = metrics.filter(m => m.url === url);
+    }
+    
+    if (platform) {
+      metrics = metrics.filter(m => m.platform === platform);
+    }
+    
+    return metrics.sort((a, b) => 
+      new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime()
+    );
+  }
+
+  async createSocialMetric(insertMetric: InsertSocialMetric): Promise<SocialMetric> {
+    const id = this.currentMetricId++;
+    const metric: SocialMetric = { 
+      ...insertMetric,
+      id,
+      createdAt: new Date()
+    };
+    this.socialMetrics.set(id, metric);
+    return metric;
+  }
+
+  async getLatestMetrics(url: string): Promise<SocialMetric | undefined> {
+    const metrics = await this.getSocialMetrics(url);
+    return metrics[0]; // First item is the latest due to sorting
   }
 }
 
